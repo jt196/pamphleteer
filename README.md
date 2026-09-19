@@ -36,27 +36,27 @@ rotating a slug takes effect on the next scan.
 
 ## Run it
 
-```yaml
-services:
-  markdown-publish:
-    image: markdown-publish:local     # or your registry image
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
-    user: "1000:1000"                 # any uid/gid that can read the vault
-    environment:
-      VAULT_DIR: /vault
-    volumes:
-      - /path/to/vault:/vault:ro
-    ports:
-      - "8080:8080"                   # put a TLS-terminating proxy in front
+`docker-compose.example.yaml` is a ready-to-use hardened service (read-only root
+filesystem, all capabilities dropped, non-root user, vault mounted read-only):
+
+```sh
+cp docker-compose.example.yaml docker-compose.yaml
+cp .env.example .env          # set VAULT_DIR, and PUID/PGID that can read it
+docker compose up -d
 ```
+
+Put a TLS-terminating reverse proxy in front of `PUBLISH_PORT`; the container
+speaks plain HTTP. Configuration is via environment variables:
 
 | Variable        | Default  | Meaning                                                  |
 |-----------------|----------|----------------------------------------------------------|
 | `VAULT_DIR`     | `/vault` | Vault root (mount it read-only)                          |
 | `LISTEN`        | `:8080`  | Listen address                                           |
 | `SCAN_INTERVAL` | `5s`     | How often to rescan; minimum `1s`                        |
+
+These are the container's own variables. In the compose example, `VAULT_DIR` in
+`.env` is the *host* path that gets mounted at `/vault` (the container's
+`VAULT_DIR` stays `/vault`).
 
 The image has no shell, so the healthcheck is built in: `/markdown-publish -healthcheck`.
 

@@ -1,0 +1,37 @@
+# Copy to docker-compose.yaml and .env.example to .env, then adjust.
+#
+#   cp docker-compose.example.yaml docker-compose.yaml
+#   cp .env.example .env
+#   docker compose up -d
+#
+# Point your TLS-terminating reverse proxy at PUBLISH_PORT. The container speaks
+# plain HTTP only.
+services:
+  markdown-publish:
+    # Override with MARKDOWN_PUBLISH_IMAGE to use a locally built image.
+    image: ${MARKDOWN_PUBLISH_IMAGE:-ghcr.io/jt196/markdown-publish:latest}
+    container_name: markdown-publish
+    restart: unless-stopped
+
+    # A single static binary on a scratch image: no shell, and it writes nothing.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+    # Must be able to read the vault (and, for synced vaults, the files' group).
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    environment:
+      VAULT_DIR: /vault
+      SCAN_INTERVAL: ${SCAN_INTERVAL:-5s}
+
+    volumes:
+      # Read-only: the server never writes to the vault.
+      - ${VAULT_DIR:?Set VAULT_DIR in .env}:/vault:ro
+
+    ports:
+      - "${PUBLISH_PORT:-8080}:8080"
+
+    # The image ships its own HEALTHCHECK (/markdown-publish -healthcheck), so
+    # there is nothing to add here.

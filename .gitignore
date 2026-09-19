@@ -2,3 +2,7 @@
 plans/
 .DS_Store
 /markdown-publish
+
+# Local deployment config: real paths and ids live here, never in the repo.
+.env
+docker-compose.yaml
