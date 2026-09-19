@@ -302,8 +302,12 @@ The code is small: `scan.go` (vault scanning and the index), `render.go` and
 ## Contributing
 
 This is a small hobby project maintained in spare time, so replies may be slow.
-Bug reports and pull requests are welcome. The privacy guarantees are the point of
-the project, so changes need tests, especially anything touching what gets served.
+Bug reports and pull requests are welcome; please use the issue forms, and
+**redact your slugs and note content** because issues are public (a slug is an
+access key). Security problems go through the private route in
+[SECURITY.md](SECURITY.md), not a public issue. The privacy guarantees are the
+point of the project, so changes need tests, especially anything touching what
+gets served.
 
 ## Acknowledgements
 

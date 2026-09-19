@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/jt196/pamphleteer/security/advisories/new
+    about: Something is being served that shouldn't be? Please report it privately here, not as a public issue.

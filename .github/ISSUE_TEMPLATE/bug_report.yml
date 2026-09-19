@@ -1,0 +1,75 @@
+name: Bug report
+description: Something doesn't work the way the README says it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **Please redact before you paste anything.** A note's slug *is* its access key, so remove or replace note links and slugs (use `SLUG`), your domain (use `example.com`), and any note text you don't want public. Issues on this repository are public.
+
+        **Is something being served that shouldn't be** (an unpublished note, a file, a path)? Please don't file it here. Use **Security, Report a vulnerability** so it stays private.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The first line of `docker logs pamphleteer`, or run `docker run --rm ghcr.io/jt196/pamphleteer -version`.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: how-run
+    attributes:
+      label: How are you running it?
+      options:
+        - docker run
+        - docker compose
+        - Built from source
+        - Something else (explain below)
+    validations:
+      required: true
+  - type: input
+    id: sync
+    attributes:
+      label: How does your vault get onto the server?
+      description: For example Syncthing, git, rsync, a network share.
+    validations:
+      required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect to see instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest set of steps that shows the problem.
+    validations:
+      required: false
+  - type: textarea
+    id: frontmatter
+    attributes:
+      label: The note's frontmatter (if relevant)
+      description: Keep the keys, redact the slug value.
+      render: yaml
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Output of `docker logs pamphleteer`, redacted.
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: redacted
+    attributes:
+      label: Checklist
+      options:
+        - label: I have removed my real slugs, links and private note content from this report.
+          required: true
