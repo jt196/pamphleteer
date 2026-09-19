@@ -8,9 +8,10 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 ARG TARGETOS TARGETARCH
+ARG VERSION=dev
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags="-s -w" -o /out/pamphleteer .
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/pamphleteer .
 
 # No shell, no package manager, no OS: the binary is the whole image. It makes
 # no outbound connections, so it needs no CA certificates either.

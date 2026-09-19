@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -13,6 +14,10 @@ import (
 	"syscall"
 	"time"
 )
+
+// version is stamped in at build time (-ldflags "-X main.version=..."); a plain
+// `go build` reports "dev".
+var version = "dev"
 
 func env(key, def string) string {
 	if v := os.Getenv(key); v != "" {
@@ -44,7 +49,12 @@ func healthcheck(listen string) int {
 
 func main() {
 	check := flag.Bool("healthcheck", false, "probe the running server and exit 0 if healthy")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("pamphleteer", version)
+		return
+	}
 
 	listen := env("LISTEN", ":8080")
 	if *check {
@@ -109,7 +119,7 @@ func main() {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	log.Info("listening", "addr", listen, "vault", vault, "scan_interval", interval.String(), "show_dates", showDates, "tz", time.Local.String())
+	log.Info("listening", "version", version, "addr", listen, "vault", vault, "scan_interval", interval.String(), "show_dates", showDates, "tz", time.Local.String())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("server error", "err", err)
 		os.Exit(1)

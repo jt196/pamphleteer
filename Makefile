@@ -22,4 +22,4 @@ build:
 	$(GO) build -o /dev/null ./...
 
 image:
-	docker build -t pamphleteer:local .
+	docker build --build-arg VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev) -t pamphleteer:local .

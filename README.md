@@ -77,6 +77,10 @@ docker run -d --name pamphleteer --restart unless-stopped \
 curl -i http://localhost:8080/healthz      # -> 200 ok
 ```
 
+`latest` follows the newest build. For anything you rely on, **pin a release**
+(for example `ghcr.io/jt196/pamphleteer:0.1.0`) and update on purpose; see the
+[releases](https://github.com/jt196/pamphleteer/releases) for what changed.
+
 Prefer Compose? Copy [`docker-compose.example.yaml`](docker-compose.example.yaml)
 to `docker-compose.yaml` and [`.env.example`](.env.example) to `.env`, set
 `VAULT_DIR` (the vault's path on the host) and `PUID`/`PGID`, then
@@ -271,6 +275,7 @@ Issues and pull requests are welcome; see [Contributing](#contributing).
 | A link to another note isn't clickable | That note isn't published (by design), or its slug is invalid |
 | Dates are a day out | Set `TZ` (for example `Europe/London`); the default is UTC |
 | A chat app shows an old preview | Those services cache previews; there's nothing to fix on the server |
+| Reporting a bug | Include the version: `docker logs pamphleteer` shows it on the first line, or run `docker run --rm ghcr.io/jt196/pamphleteer -version` |
 | A very large note isn't served | Notes over 4 MB, or with more than 32 KB of frontmatter, aren't served |
 
 ## Footprint
