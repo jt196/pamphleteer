@@ -1,0 +1,7 @@
+.git
+plans
+*_test.go
+Makefile
+README.md
+Dockerfile
+.dockerignore

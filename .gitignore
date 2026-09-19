@@ -1,0 +1,4 @@
+# Private planning notes (contain real paths/domains); never commit.
+plans/
+.DS_Store
+/markdown-publish
