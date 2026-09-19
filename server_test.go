@@ -158,6 +158,8 @@ func TestStylesheetPrintAndColourSchemeScoping(t *testing.T) {
 		t.Fatalf("light code theme (.chroma .k at %d) appears before its media query (%d)", i, m)
 	}
 	mustContain(t, css, "@page")
+	// Nested lists must not add a paragraph-sized gap after each sub-list.
+	mustContain(t, css, "li > ul, li > ol { margin: 0; }")
 }
 
 func TestEmbedSwappedForSymlinkAfterIndexingIsRefused(t *testing.T) {

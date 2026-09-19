@@ -37,6 +37,9 @@ h2, h3, h4, h5, h6 { line-height: 1.3; margin: 2rem 0 0.75rem; }
 h2 { font-size: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
 h3 { font-size: 1.25rem; }
 p, ul, ol, blockquote, table, pre, details { margin: 0 0 1rem; }
+/* A list inside a list item must not add its own bottom margin, or every
+   sub-list leaves a gap before the next bullet. */
+li > ul, li > ol { margin: 0; }
 
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
