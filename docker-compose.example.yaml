@@ -25,6 +25,8 @@ services:
     environment:
       VAULT_DIR: /vault
       SCAN_INTERVAL: ${SCAN_INTERVAL:-5s}
+      SHOW_DATES: ${SHOW_DATES:-true}
+      TZ: ${TZ:-UTC}
 
     volumes:
       # Read-only: the server never writes to the vault.

@@ -7,7 +7,7 @@
   --link: #0969da;
   --code-bg: #f6f8fa;
 }
-@media (prefers-color-scheme: dark) {
+@media screen and (prefers-color-scheme: dark) {
   :root {
     --bg: #0d1117;
     --fg: #e6edf3;
@@ -71,3 +71,90 @@ th { background: var(--code-bg); }
 
 ul.contains-task-list { list-style: none; padding-left: 0.5rem; }
 .footnotes { font-size: 0.9rem; color: var(--muted); }
+
+/* ---- page furniture ---- */
+
+.meta { margin: -1rem 0 1.5rem; color: var(--muted); font-size: 0.9rem; }
+
+/* Native <details>: the contents list on phones, and any <details> in a note. */
+details {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+}
+details[open] > summary { margin-bottom: 0.5rem; }
+summary { cursor: pointer; font-weight: 600; }
+
+/* Heading permalinks: the "#" is generated here, so it is never page text. */
+.anchor { margin-left: 0.4em; text-decoration: none; opacity: 0; font-weight: 400; }
+.anchor::before { content: "#"; }
+h1:hover .anchor, h2:hover .anchor, h3:hover .anchor,
+h4:hover .anchor, h5:hover .anchor, h6:hover .anchor,
+.anchor:focus { opacity: 0.6; }
+@media (hover: none) { .anchor { opacity: 0.35; } }
+h1, h2, h3, h4, h5, h6 { scroll-margin-top: 1rem; }
+
+/* ---- contents list ---- */
+
+.toc ul { list-style: none; margin: 0; padding-left: 0; }
+.toc ul ul { padding-left: 1rem; }
+.toc li { margin: 0.25rem 0; }
+.toc a { color: var(--muted); }
+.toc a:hover { color: var(--link); }
+.toc-mobile { margin-bottom: 1.5rem; }
+.toc-mobile nav { font-size: 0.95rem; }
+.toc-side { display: none; }
+.toc-title { margin: 0 0 0.5rem; font-weight: 600; }
+
+/* Wide screens: a sticky panel beside the text instead of the collapsed block. */
+@media (min-width: 72rem) {
+  .with-toc {
+    display: grid;
+    grid-template-columns: minmax(0, 46rem) 16rem;
+    column-gap: 2.5rem;
+    justify-content: center;
+  }
+  .with-toc main { max-width: none; margin: 0; padding-inline: 0; }
+  .toc-mobile { display: none; }
+  .toc-side {
+    display: block;
+    position: sticky;
+    top: 2rem;
+    align-self: start;
+    margin-top: 2rem;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+    font-size: 0.9rem;
+  }
+}
+
+/* ---- print: what "save as PDF" produces ---- */
+
+@page { margin: 18mm 16mm; }
+
+@media print {
+  :root {
+    --bg: #fff; --fg: #000; --muted: #444; --border: #bbb; --link: #000; --code-bg: #f5f5f5;
+  }
+  html { font-size: 11pt; background: #fff; color: #000; }
+  main { max-width: none; padding: 0; }
+  .toc, .anchor { display: none !important; }
+  a { color: inherit; text-decoration: underline; }
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #444;
+    word-break: break-all;
+  }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  pre, blockquote, table, figure, img, tr { break-inside: avoid; }
+  pre { white-space: pre-wrap; overflow: visible; }
+  table { display: table; }
+  img, video { max-width: 100%; }
+}
+
+/* Where supported, print a collapsed <details> expanded (it otherwise prints
+   closed, hiding its content). Separate rule: unsupported browsers drop it. */
+@media print {
+  details::details-content { content-visibility: visible; }
+}

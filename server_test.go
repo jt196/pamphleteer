@@ -144,6 +144,22 @@ func TestFixedRoutes(t *testing.T) {
 	}
 }
 
+func TestStylesheetPrintAndColourSchemeScoping(t *testing.T) {
+	a, _, _ := newTest(t, nil)
+	css := body(get(a, "GET", "/style.css"))
+	mustContain(t, css, "@media print", "@media (min-width: 72rem)", ".anchor::before", ".toc-side")
+	// Dark palettes (page and code) apply to screens only, so print is always light.
+	mustContain(t, css, "@media screen and (prefers-color-scheme: dark)")
+	mustNotContain(t, css, "@media (prefers-color-scheme: dark)")
+	// Light and dark code themes are mutually exclusive (see highlightCSS): the
+	// light one must not apply unconditionally, or its token colours leak into dark.
+	mustContain(t, css, "@media print, (prefers-color-scheme: light), (prefers-color-scheme: no-preference)")
+	if i, m := strings.Index(css, ".chroma .k"), strings.Index(css, "@media print, (prefers-color-scheme: light)"); i < m {
+		t.Fatalf("light code theme (.chroma .k at %d) appears before its media query (%d)", i, m)
+	}
+	mustContain(t, css, "@page")
+}
+
 func TestEmbedSwappedForSymlinkAfterIndexingIsRefused(t *testing.T) {
 	outside := t.TempDir()
 	writeVault(t, outside, "evil.png", "outside-secret")

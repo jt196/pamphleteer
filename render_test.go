@@ -4,9 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"log/slog"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 const mainSlug = "main12345"
@@ -95,7 +97,7 @@ func TestObsidianCommentsAreStripped(t *testing.T) {
 	mustNotContain(t, html, "hidden inline", "hidden multi-line", "still hidden", "hidden again", "tail-secret", "unterminated")
 }
 
-func TestRawHTMLIsNotPassedThrough(t *testing.T) {
+func TestRawHTMLIsSanitized(t *testing.T) {
 	html := renderMain(t, strings.Join([]string{
 		"para with <script>alert(1)</script> inline and <img src=x onerror=alert(2)> and line<br>break",
 		"",
@@ -103,16 +105,72 @@ func TestRawHTMLIsNotPassedThrough(t *testing.T) {
 		"",
 		"<script>alert(3)</script>",
 		"",
-		"<div onclick=\"alert(4)\">block</div>",
+		"<div onclick=\"alert(4)\" style=\"color:red\" class=\"x\" id=\"y\">block</div>",
 		"",
 		"<a href=\"javascript:alert(5)\">js link</a> [md js](javascript:alert(6))",
+		"",
+		"<iframe src=\"https://evil.example\"></iframe>",
+		"",
+		"<form action=\"/x\"><input name=q></form>",
+		"",
+		"<svg onload=alert(7)></svg>",
 	}, "\n"), nil)
-	// Tags and attributes are dropped. Text that sat between dropped tags
-	// (e.g. the "alert(1)" inside <script>) is left as inert escaped text.
-	mustNotContain(t, html, "<script", "onerror", "onclick", "private html comment", "javascript:", "<img", "<div", "<a ")
-	mustContain(t, html, "<br>", "js link")
-	// Block-level HTML is dropped whole, text and all (reported in the log).
-	mustNotContain(t, html, "block</", "omitted")
+	mustNotContain(t, html, "<script", "onerror", "onclick", "style=", `class="x"`, `id="y"`,
+		"private html comment", "javascript:", "<iframe", "<form", "<input", "<svg", "onload", `src="x"`)
+	// Allowed structure survives with its attributes stripped.
+	mustContain(t, html, "<br>", "<div>block</div>", "js link")
+}
+
+func TestDetailsBlockKeepsMarkdownInside(t *testing.T) {
+	html := renderMain(t, "<details>\n<summary>More info</summary>\n\nHidden **bold** text with [[Other]]\n\n</details>\n\nafter",
+		map[string]string{"Other.md": pubNoteSrc("other12345", "x")})
+	mustContain(t, html, "<details>", "<summary>More info</summary>", "<strong>bold</strong>",
+		`<a href="/other12345">Other</a>`, "</details>", "after")
+	// The tags balance, so the browser nests them the way the author wrote them.
+	if strings.Count(html, "<details") != 1 || strings.Count(html, "</details>") != 1 {
+		t.Fatalf("unbalanced details:\n%s", html)
+	}
+
+	open := renderMain(t, "<details open>\n<summary>S</summary>\n\nbody\n\n</details>\n", nil)
+	mustContain(t, open, "<details open")
+}
+
+func TestAllowedHTMLKeepsSafeAttributesOnly(t *testing.T) {
+	html := renderMain(t, strings.Join([]string{
+		`<a href="https://example.com/x" onclick="x()">link</a>`,
+		"",
+		`<a href="relative/path.md">relative</a> <a href="mailto:a@example.com">mail</a>`,
+		"",
+		`<table><tr><td colspan="2" style="x">cell</td></tr></table>`,
+		"",
+		`<img src="https://example.com/ok.png" alt="remote" width="120" onerror="x()">`,
+	}, "\n"), nil)
+	mustContain(t, html, `href="https://example.com/x"`, "noreferrer", `href="mailto:a@example.com"`,
+		`colspan="2"`, `src="https://example.com/ok.png"`, `alt="remote"`, `width="120"`)
+	mustNotContain(t, html, "onclick", "onerror", "style=", `href="relative`, "relative/path.md")
+}
+
+func TestLocalRawImgIsDroppedAndReported(t *testing.T) {
+	root := t.TempDir()
+	writeVault(t, root, "Main.md", pubNoteSrc(mainSlug,
+		"<img src=\"Attachments/pic.png\" alt=\"x\">\n\nand <img src=\"https://example.com/ok.png\" alt=\"remote\">\n"))
+	writeVault(t, root, "Clean.md", pubNoteSrc("clean12345", "nothing to see, with a line<br>break and <span>span</span>"))
+
+	var logs strings.Builder
+	a := newApp()
+	sc := newScanner(root, slog.New(slog.NewTextHandler(&logs, nil)), &a.snap)
+	if _, err := sc.scan(); err != nil {
+		t.Fatal(err)
+	}
+	html := body(get(a, "GET", "/"+mainSlug))
+	mustNotContain(t, html, "Attachments", "pic.png")
+	mustContain(t, html, `src="https://example.com/ok.png"`)
+	if !strings.Contains(logs.String(), "local path was dropped") || !strings.Contains(logs.String(), "Main.md") {
+		t.Fatalf("expected a warning naming Main.md, got:\n%s", logs.String())
+	}
+	if strings.Contains(logs.String(), "Clean.md") {
+		t.Fatalf("allowed HTML must not be reported:\n%s", logs.String())
+	}
 }
 
 func TestFrontmatterIsNeverRendered(t *testing.T) {
@@ -293,21 +351,88 @@ func TestStripCommentsUnit(t *testing.T) {
 	}
 }
 
-func TestOmittedRawHTMLIsReportedInTheLog(t *testing.T) {
-	root := t.TempDir()
-	writeVault(t, root, "Main.md", pubNoteSrc(mainSlug, "<details>\nhidden content\n</details>\n\nand <span>inline</span> tag\n"))
-	writeVault(t, root, "Clean.md", pubNoteSrc("clean12345", "nothing to see, with a line<br>break"))
+var descRe = regexp.MustCompile(`<meta name="description" content="([^"]*)"`)
+var h3IDRe = regexp.MustCompile(`<h3 id="([^"]+)"`)
 
-	var logs strings.Builder
-	a := newApp()
-	sc := newScanner(root, slog.New(slog.NewTextHandler(&logs, nil)), &a.snap)
-	if _, err := sc.scan(); err != nil {
-		t.Fatal(err)
+func TestContentsListAppearsFromThreeHeadings(t *testing.T) {
+	html := renderMain(t, "# Alpha\n\ntext\n\n## Beta\n\ntext\n\n### R&D \"quotes\"\n\ntext\n\n## Delta\n\ntext\n", nil)
+	mustContain(t, html, `class="with-toc"`, `class="toc toc-mobile"`, `class="toc toc-side"`, "<summary>Contents</summary>")
+	// Nested by level, with siblings closing correctly.
+	mustContain(t, html, `<a href="#alpha">Alpha</a><ul><li><a href="#beta">Beta</a><ul>`,
+		`</li></ul></li><li><a href="#delta">Delta</a>`)
+	// Heading text is escaped, and each link targets the heading's real id.
+	m := h3IDRe.FindStringSubmatch(html)
+	if m == nil {
+		t.Fatalf("no h3 id in:\n%s", html)
 	}
-	if !strings.Contains(logs.String(), "raw HTML omitted from published note") || !strings.Contains(logs.String(), "Main.md") {
-		t.Fatalf("expected a warning naming Main.md, got:\n%s", logs.String())
+	mustContain(t, html, `href="#`+m[1]+`">R&amp;D &#34;quotes&#34;</a>`)
+	mustNotContain(t, html, "<ul><ul>")
+}
+
+func TestNoContentsListForShortNotes(t *testing.T) {
+	html := renderMain(t, "## One\n\ntext\n\n## Two\n\ntext\n", nil)
+	mustNotContain(t, html, "toc", "with-toc", "Contents")
+}
+
+func TestContentsListNeverSkipsANestingLevel(t *testing.T) {
+	html := renderMain(t, "## A\n\nx\n\n#### B\n\nx\n\n## C\n\nx\n\n##### too deep to list\n", nil)
+	mustNotContain(t, html, "<ul><ul>", "too deep to list</a>")
+	mustContain(t, html, `<a href="#b">B</a>`)
+}
+
+func TestHeadingPermalinks(t *testing.T) {
+	html := renderMain(t, "## Section One\n\nbody text here\n", nil)
+	mustContain(t, html, `<h2 id="section-one">Section One<a class="anchor" href="#section-one" aria-label="Link to this section"></a></h2>`)
+	// The permalink marker is drawn by CSS, so it never leaks into page text.
+	if m := descRe.FindStringSubmatch(html); m == nil || strings.Contains(m[1], "#") {
+		t.Fatalf("description should not contain the anchor marker: %v", m)
 	}
-	if strings.Contains(logs.String(), "Clean.md") {
-		t.Fatalf("an allowed <br> must not be reported:\n%s", logs.String())
+}
+
+func TestDatesLine(t *testing.T) {
+	updated := time.Date(2026, 3, 4, 12, 0, 0, 0, time.Local)
+	cases := []struct {
+		name, created, want string
+		show                bool
+	}{
+		{"both, different days", "2026-01-02", "Created 2 Jan 2026 · Updated 4 Mar 2026", true},
+		{"same day shows created once", "2026-03-04", "Created 4 Mar 2026", true},
+		{"no created field", "", "Updated 4 Mar 2026", true},
+		{"unparseable created is ignored", "last tuesday", "Updated 4 Mar 2026", true},
+		{"rfc3339 created", "2026-01-02T09:30:00Z", "Created 2 Jan 2026 · Updated 4 Mar 2026", true},
+		{"datetime created", "2026-01-02 09:30", "Created 2 Jan 2026 · Updated 4 Mar 2026", true},
+		{"disabled", "2026-01-02", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			fm := "---\npublish: true\nslug: " + mainSlug + "\n"
+			if c.created != "" {
+				fm += "created: \"" + c.created + "\"\n"
+			}
+			path := writeVault(t, root, "Main.md", fm+"---\nbody\n")
+			if err := os.Chtimes(path, updated, updated); err != nil {
+				t.Fatal(err)
+			}
+			a := newApp()
+			sc := newScanner(root, testLogger(), &a.snap)
+			sc.showDates = c.show
+			if _, err := sc.scan(); err != nil {
+				t.Fatal(err)
+			}
+			html := body(get(a, "GET", "/"+mainSlug))
+			if c.want == "" {
+				mustNotContain(t, html, `class="meta"`, "Updated", "Created")
+				return
+			}
+			mustContain(t, html, `<p class="meta">`+c.want+`</p>`)
+		})
+	}
+}
+
+func TestTimezoneDatabaseIsEmbedded(t *testing.T) {
+	// The scratch image ships no zoneinfo; without the embedded copy, TZ is ignored.
+	if _, err := time.LoadLocation("Europe/London"); err != nil {
+		t.Fatalf("embedded tzdata missing: %v", err)
 	}
 }

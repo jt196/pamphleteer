@@ -11,8 +11,8 @@ Obsidian plugin writes, so the plugin keeps working unchanged.
 |                | This                                   | Quartz stack it replaces                |
 |----------------|----------------------------------------|-----------------------------------------|
 | Containers     | 1                                      | 2                                       |
-| Image size     | ~19 MB                                 | ~1.5 GB (web) + stager                  |
-| Memory (RSS)   | ~23 MB with an 11k-file vault          | ~115 MB by `docker stats`               |
+| Image size     | ~20 MB                                 | ~1.5 GB (web) + stager                  |
+| Memory (RSS)   | ~20 MB with an 11k-file vault          | ~115 MB by `docker stats`               |
 | Change → live  | next scan (default 5 s)                | 3–60 s rebuild                          |
 | Client JS      | none                                   | Quartz SPA bundle                       |
 
@@ -53,6 +53,8 @@ speaks plain HTTP. Configuration is via environment variables:
 | `VAULT_DIR`     | `/vault` | Vault root (mount it read-only)                          |
 | `LISTEN`        | `:8080`  | Listen address                                           |
 | `SCAN_INTERVAL` | `5s`     | How often to rescan; minimum `1s`                        |
+| `SHOW_DATES`    | `true`   | Show the "Created / Updated" line under the title        |
+| `TZ`            | `UTC`    | Time zone for those dates, e.g. `Europe/London`          |
 
 These are the container's own variables. In the compose example, `VAULT_DIR` in
 `.env` is the *host* path that gets mounted at `/vault` (the container's
@@ -78,9 +80,12 @@ Everything below is covered by tests (`make test`).
   embeds disappear rather than printing a file name.
 - **`%%Obsidian comments%%` are stripped** (an unclosed one swallows the rest
   of the note), except inside code. Frontmatter is never rendered.
-- **No raw HTML** except a few attribute-free inline tags (`<br>`, `<kbd>`,
-  `<sub>`, ...). Block-level HTML is dropped, and a warning naming the note is
-  logged.
+- **Raw HTML goes through a strict allowlist** ([bluemonday](https://github.com/microcosm-cc/bluemonday)):
+  structural tags such as `<details>`, `<summary>`, `<div>`, `<table>`, `<br>`,
+  `<kbd>`; no scripts, styles, classes, ids, event handlers or relative URLs
+  (only `http`, `https` and `mailto` links). A local-path `<img>` can't survive
+  that (it would expose a vault path); it is dropped and a warning naming the
+  note is logged, so embed the file with `![[file]]` instead.
 - **Hardened responses.** CSP `default-src 'none'` with no script source,
   `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
   `noindex` (header, meta and `robots.txt`), uniform uncacheable 404s. No
@@ -91,13 +96,30 @@ Everything below is covered by tests (`make test`).
 CommonMark + GFM (tables, task lists, strikethrough, autolinks), footnotes,
 syntax highlighting (Chroma, light/dark, class-based so no inline styles),
 `[[wikilinks]]` / `[[Note|alias]]`, `![[image.png|300]]` embeds, images, and
-audio/video via embeds or links. Light/dark follows the visitor's OS setting.
+audio/video via embeds or links.
+
+Page furniture, all plain HTML and CSS (still no JavaScript):
+
+- **Contents list** for notes with three or more headings (h1-h4): a sticky
+  panel beside the text on wide screens, a collapsed "Contents" box on phones.
+  Both are rendered and a media query shows one, so it works in every browser.
+- **Heading permalinks** (a `#` that appears on hover, and is always faintly
+  visible on touch screens).
+- **Dates under the title:** `Updated` is the file's modified time (Obsidian
+  writes no modified date; Syncthing preserves mtimes). `Created` comes from the
+  note's `created:` frontmatter if present and parseable (ISO date or datetime),
+  because a file's own creation time is just when it landed on the server. Turn
+  the line off with `SHOW_DATES=false`.
+- **Print stylesheet** for "save as PDF": always light, no contents list or
+  permalinks, real page margins, external link URLs printed after the link text,
+  and collapsed `<details>` printed expanded (in browsers that support
+  `::details-content`).
+- Light/dark follows the visitor's OS setting, including code highlighting.
 
 ## Not (yet) supported
 
 - Folder bundles / folder sidebars (single notes only).
 - Math, callouts, Mermaid, Dataview, popovers, in-page search.
-- Block-level raw HTML (e.g. `<details>` on its own line) is omitted.
 - `![[Other Note]]` note embeds render as a link, not transcluded content.
 - Heading anchors in wikilinks (`[[Note#Heading]]` links to the note).
 

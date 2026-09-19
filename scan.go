@@ -57,8 +57,9 @@ type vaultFile struct {
 
 type pubNote struct {
 	vaultFile
-	slug  string
-	title string
+	slug    string
+	title   string
+	created string
 }
 
 type noteMeta struct {
@@ -66,6 +67,7 @@ type noteMeta struct {
 	publish bool
 	slug    string
 	title   string
+	created string
 }
 
 type page struct {
@@ -91,20 +93,22 @@ type hashEntry struct {
 }
 
 type scanner struct {
-	vault  string
-	log    *slog.Logger
-	cur    *atomic.Pointer[snapshot]
-	meta   map[string]noteMeta
-	hashes map[string]hashEntry
+	vault     string
+	log       *slog.Logger
+	cur       *atomic.Pointer[snapshot]
+	meta      map[string]noteMeta
+	hashes    map[string]hashEntry
+	showDates bool
 }
 
 func newScanner(vault string, log *slog.Logger, cur *atomic.Pointer[snapshot]) *scanner {
 	return &scanner{
-		vault:  vault,
-		log:    log,
-		cur:    cur,
-		meta:   map[string]noteMeta{},
-		hashes: map[string]hashEntry{},
+		vault:     vault,
+		log:       log,
+		cur:       cur,
+		meta:      map[string]noteMeta{},
+		hashes:    map[string]hashEntry{},
+		showDates: true,
 	}
 }
 
@@ -208,15 +212,15 @@ func splitFrontmatter(b []byte) (fm, body []byte, ok bool) {
 
 // parseMeta reads publish/slug/title. publish must be a real YAML boolean
 // true: the string "true", "yes" and friends do not count.
-func parseMeta(head []byte, stem string) (publish bool, slug, title string) {
+func parseMeta(head []byte, stem string) (publish bool, slug, title, created string) {
 	title = stem
 	fm, _, ok := splitFrontmatter(head)
 	if !ok {
-		return false, "", title
+		return false, "", title, ""
 	}
 	var m map[string]yaml.Node
 	if err := yaml.Unmarshal(fm, &m); err != nil {
-		return false, "", title
+		return false, "", title, ""
 	}
 	if n, ok := m["publish"]; ok && n.Kind == yaml.ScalarNode && n.ShortTag() == "!!bool" && strings.EqualFold(n.Value, "true") {
 		publish = true
@@ -227,7 +231,10 @@ func parseMeta(head []byte, stem string) (publish bool, slug, title string) {
 	if n, ok := m["title"]; ok && n.Kind == yaml.ScalarNode && strings.TrimSpace(n.Value) != "" {
 		title = strings.TrimSpace(n.Value)
 	}
-	return publish, slug, title
+	if n, ok := m["created"]; ok && n.Kind == yaml.ScalarNode {
+		created = n.Value
+	}
+	return publish, slug, title, created
 }
 
 func readHead(path string) []byte {
@@ -243,8 +250,8 @@ func readHead(path string) []byte {
 
 func readMeta(f vaultFile) noteMeta {
 	stem := strings.TrimSuffix(filepath.Base(f.path), filepath.Ext(f.path))
-	publish, slug, title := parseMeta(readHead(f.path), stem)
-	return noteMeta{key: f.key, publish: publish, slug: slug, title: title}
+	publish, slug, title, created := parseMeta(readHead(f.path), stem)
+	return noteMeta{key: f.key, publish: publish, slug: slug, title: title, created: created}
 }
 
 func readLimited(path string, max int64) ([]byte, error) {
@@ -294,7 +301,7 @@ func validate(cands []*pubNote) (pubs []*pubNote, problems []string) {
 func fingerprint(pubs []*pubNote, atts []vaultFile, problems []string) string {
 	h := sha256.New()
 	for _, p := range pubs {
-		fmt.Fprintf(h, "n|%s|%d|%d|%s|%s\n", p.rel, p.key.mtime, p.key.size, p.slug, p.title)
+		fmt.Fprintf(h, "n|%s|%d|%d|%s|%s|%s\n", p.rel, p.key.mtime, p.key.size, p.slug, p.title, p.created)
 	}
 	for _, a := range atts {
 		fmt.Fprintf(h, "a|%s|%d|%d\n", a.rel, a.key.mtime, a.key.size)
@@ -341,7 +348,7 @@ func (s *scanner) scan() (changed bool, err error) {
 			s.meta[f.path] = m
 		}
 		if m.publish {
-			cands = append(cands, &pubNote{vaultFile: f, slug: m.slug, title: m.title})
+			cands = append(cands, &pubNote{vaultFile: f, slug: m.slug, title: m.title, created: m.created})
 		}
 	}
 	for p := range s.meta {
@@ -378,6 +385,7 @@ func (s *scanner) scan() (changed bool, err error) {
 
 func (s *scanner) build(pubs []*pubNote, atts []vaultFile, fp string) *snapshot {
 	res := newResolver(pubs, atts, s.hashFile)
+	res.showDates = s.showDates
 	md := res.markdown()
 	snap := &snapshot{pages: make(map[string]*page, len(pubs)), fingerprint: fp}
 	for _, p := range pubs {
@@ -393,7 +401,7 @@ func (s *scanner) build(pubs []*pubNote, atts []vaultFile, fp string) *snapshot 
 			continue
 		}
 		if res.omitted > 0 {
-			s.log.Warn("raw HTML omitted from published note", "note", p.rel, "fragments", res.omitted)
+			s.log.Warn("raw HTML <img> with a local path was dropped; embed it with ![[file]] instead", "note", p.rel, "images", res.omitted)
 		}
 		sum := sha256.Sum256(body)
 		snap.pages[p.slug] = &page{body: body, etag: `"` + hex.EncodeToString(sum[:8]) + `"`}

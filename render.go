@@ -31,7 +31,10 @@ var pageTmpl = template.Must(template.ParseFS(assets, "assets/page.html"))
 type pageData struct {
 	Title       string
 	Description string
+	Meta        string
 	Body        template.HTML
+	TOCMobile   template.HTML
+	TOCSide     template.HTML
 }
 
 // resolver maps the names used inside notes ([[Note]], ![[img.png]]) onto
@@ -43,7 +46,8 @@ type resolver struct {
 	attByBase map[string][]vaultFile
 	hash      func(vaultFile) (string, error)
 	embeds    map[string]embedInfo
-	omitted   int // raw HTML fragments dropped from the note being rendered
+	omitted   int  // local <img> tags in raw HTML that had to be dropped, for the current note
+	showDates bool // show "Created"/"Updated" under the title
 }
 
 func newResolver(pubs []*pubNote, atts []vaultFile, hash func(vaultFile) (string, error)) *resolver {
@@ -188,8 +192,6 @@ var (
 	videoExtRe = regexp.MustCompile(`(?i)\.(mp4|webm|mov|m4v|ogv)$`)
 	audioExtRe = regexp.MustCompile(`(?i)\.(mp3|wav|ogg|m4a|opus|aac|flac)$`)
 	sizeHintRe = regexp.MustCompile(`^\d+(x\d+)?$`)
-	// Inline raw HTML is dropped except for a few attribute-free tags.
-	allowedRawHTML = regexp.MustCompile(`(?i)^</?(br|details|summary|kbd|sub|sup|mark|u|s|del|ins|small|abbr|b|i|em|strong|code)\s*/?>$`)
 )
 
 func esc(s string) string { return html.EscapeString(s) }
@@ -250,6 +252,7 @@ func (x *nodeRenderers) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
 	reg.Register(ast.KindImage, x.renderImage)
 	reg.Register(ast.KindRawHTML, x.renderRawHTML)
 	reg.Register(ast.KindHTMLBlock, x.renderHTMLBlock)
+	reg.Register(ast.KindHeading, x.renderHeading)
 }
 
 func (x *nodeRenderers) renderWiki(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -362,32 +365,6 @@ func (x *nodeRenderers) renderImage(w util.BufWriter, source []byte, n ast.Node,
 	return ast.WalkSkipChildren, nil
 }
 
-func (x *nodeRenderers) renderRawHTML(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
-	if !entering {
-		return ast.WalkSkipChildren, nil
-	}
-	raw := n.(*ast.RawHTML)
-	for i := 0; i < raw.Segments.Len(); i++ {
-		seg := raw.Segments.At(i)
-		tag := seg.Value(source)
-		if allowedRawHTML.Match(tag) {
-			w.Write(tag)
-		} else {
-			x.r.omitted++
-		}
-	}
-	return ast.WalkSkipChildren, nil
-}
-
-// renderHTMLBlock drops block-level raw HTML entirely (including any text
-// inside it) and counts it, so the loss is reported instead of silent.
-func (x *nodeRenderers) renderHTMLBlock(w util.BufWriter, source []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
-	if entering {
-		x.r.omitted++
-	}
-	return ast.WalkSkipChildren, nil
-}
-
 func nodeText(n ast.Node, src []byte) string {
 	var b strings.Builder
 	_ = ast.Walk(n, func(c ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -438,7 +415,11 @@ func highlightCSS() string {
 	var light, dark bytes.Buffer
 	_ = f.WriteCSS(&light, styles.Get("github"))
 	_ = f.WriteCSS(&dark, styles.Get("github-dark"))
-	return light.String() + "\n@media (prefers-color-scheme: dark){\n" + dark.String() + "}\n"
+	// The two themes must be mutually exclusive: the light theme colours some
+	// token classes the dark one leaves alone, and those would otherwise stay
+	// near-black on a dark background. Print is always light.
+	return "@media print, (prefers-color-scheme: light), (prefers-color-scheme: no-preference){\n" + light.String() +
+		"}\n@media screen and (prefers-color-scheme: dark){\n" + dark.String() + "}\n"
 }
 
 // ---- note preparation ----
@@ -564,16 +545,21 @@ func describe(renderedHTML string) string {
 
 func (r *resolver) renderNote(md goldmark.Markdown, p *pubNote, raw []byte) ([]byte, error) {
 	_, body, _ := splitFrontmatter(raw)
-	src := dropLeadingTitle(stripComments(string(body)), p.title)
+	src := []byte(dropLeadingTitle(stripComments(string(body)), p.title))
+	doc := md.Parser().Parse(text.NewReader(src))
 	var content bytes.Buffer
-	if err := md.Convert([]byte(src), &content); err != nil {
+	if err := md.Renderer().Render(&content, src, doc); err != nil {
 		return nil, err
 	}
+	mobile, side := tocHTML(collectTOC(doc, src))
 	var out bytes.Buffer
 	err := pageTmpl.Execute(&out, pageData{
 		Title:       p.title,
 		Description: describe(content.String()),
+		Meta:        r.metaLine(p),
 		Body:        template.HTML(content.String()),
+		TOCMobile:   mobile,
+		TOCSide:     side,
 	})
 	return out.Bytes(), err
 }

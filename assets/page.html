@@ -15,9 +15,20 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+{{- if .TOCSide}}
+<div class="with-toc">
+{{- end}}
 <main>
 <h1>{{.Title}}</h1>
+{{- if .Meta}}
+<p class="meta">{{.Meta}}</p>
+{{- end}}
+{{.TOCMobile}}
 {{.Body}}
 </main>
+{{- if .TOCSide}}
+{{.TOCSide}}
+</div>
+{{- end}}
 </body>
 </html>

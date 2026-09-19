@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 )
@@ -58,8 +59,15 @@ func main() {
 		os.Exit(2)
 	}
 
+	showDates, err := strconv.ParseBool(env("SHOW_DATES", "true"))
+	if err != nil {
+		log.Error("SHOW_DATES must be true or false", "value", os.Getenv("SHOW_DATES"))
+		os.Exit(2)
+	}
+
 	a := newApp()
 	sc := newScanner(vault, log, &a.snap)
+	sc.showDates = showDates
 	if _, err := sc.scan(); err != nil {
 		log.Error("initial vault scan failed", "vault", vault, "err", err)
 		os.Exit(1)
@@ -101,7 +109,7 @@ func main() {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	log.Info("listening", "addr", listen, "vault", vault, "scan_interval", interval.String())
+	log.Info("listening", "addr", listen, "vault", vault, "scan_interval", interval.String(), "show_dates", showDates, "tz", time.Local.String())
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Error("server error", "err", err)
 		os.Exit(1)

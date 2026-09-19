@@ -32,11 +32,25 @@ func TestParseMeta(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			pub, slug, title := parseMeta([]byte(c.in), "stem")
+			pub, slug, title, _ := parseMeta([]byte(c.in), "stem")
 			if pub != c.wantPublish || slug != c.wantSlug || title != c.wantTitle {
 				t.Fatalf("got (%v, %q, %q), want (%v, %q, %q)", pub, slug, title, c.wantPublish, c.wantSlug, c.wantTitle)
 			}
 		})
+	}
+}
+
+func TestParseMetaCreated(t *testing.T) {
+	for in, want := range map[string]string{
+		"---\ncreated: 2026-09-17\n---\n":           "2026-09-17",
+		"---\ncreated: 2026-09-17T10:30:00Z\n---\n": "2026-09-17T10:30:00Z",
+		"---\ncreated: \"2026-09-17 10:30\"\n---\n": "2026-09-17 10:30",
+		"---\ncreated: [1, 2]\n---\n":               "",
+		"---\ntitle: x\n---\n":                      "",
+	} {
+		if _, _, _, got := parseMeta([]byte(in), "s"); got != want {
+			t.Errorf("created for %q = %q, want %q", in, got, want)
+		}
 	}
 }
 
