@@ -1,7 +1,7 @@
 # Private planning notes (contain real paths/domains); never commit.
 plans/
 .DS_Store
-/markdown-publish
+/pamphleteer
 
 # Local deployment config: real paths and ids live here, never in the repo.
 .env

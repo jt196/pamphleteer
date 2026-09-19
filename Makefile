@@ -3,8 +3,8 @@
 GO_IMAGE ?= golang:1.27
 GO = docker run --rm \
 	-v "$(CURDIR)":/src -w /src \
-	-v markdown-publish-gomod:/go/pkg/mod \
-	-v markdown-publish-gobuild:/root/.cache/go-build \
+	-v pamphleteer-gomod:/go/pkg/mod \
+	-v pamphleteer-gobuild:/root/.cache/go-build \
 	$(GO_IMAGE) go
 
 .PHONY: tidy vet test build image
@@ -22,4 +22,4 @@ build:
 	$(GO) build -o /dev/null ./...
 
 image:
-	docker build -t markdown-publish:local .
+	docker build -t pamphleteer:local .

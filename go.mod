@@ -1,4 +1,4 @@
-module github.com/jt196/markdown-publish
+module github.com/jt196/pamphleteer
 
 go 1.27.1
 

@@ -7,10 +7,10 @@
 # Point your TLS-terminating reverse proxy at PUBLISH_PORT. The container speaks
 # plain HTTP only.
 services:
-  markdown-publish:
-    # Override with MARKDOWN_PUBLISH_IMAGE to use a locally built image.
-    image: ${MARKDOWN_PUBLISH_IMAGE:-ghcr.io/jt196/markdown-publish:latest}
-    container_name: markdown-publish
+  pamphleteer:
+    # Override with PAMPHLETEER_IMAGE to use a locally built image.
+    image: ${PAMPHLETEER_IMAGE:-ghcr.io/jt196/pamphleteer:latest}
+    container_name: pamphleteer
     restart: unless-stopped
 
     # A single static binary on a scratch image: no shell, and it writes nothing.
@@ -35,5 +35,5 @@ services:
     ports:
       - "${PUBLISH_PORT:-8080}:8080"
 
-    # The image ships its own HEALTHCHECK (/markdown-publish -healthcheck), so
+    # The image ships its own HEALTHCHECK (/pamphleteer -healthcheck), so
     # there is nothing to add here.
