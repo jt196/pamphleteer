@@ -18,9 +18,10 @@ const csp = "default-src 'none'; img-src 'self' https:; media-src 'self' https:;
 // used as map keys: no request can reach the filesystem except through a path
 // the scanner already vetted and recorded in the snapshot.
 type app struct {
-	snap    atomic.Pointer[snapshot]
-	css     []byte
-	cssETag string
+	snap         atomic.Pointer[snapshot]
+	css          []byte
+	cssETag      string
+	notFoundBody []byte
 }
 
 func newApp() *app {
@@ -30,7 +31,11 @@ func newApp() *app {
 	}
 	css = append(css, []byte("\n"+highlightCSS())...)
 	sum := sha256.Sum256(css)
-	return &app{css: css, cssETag: `"` + hex.EncodeToString(sum[:8]) + `"`}
+	nf, err := assets.ReadFile("assets/notfound.html")
+	if err != nil {
+		panic(err)
+	}
+	return &app{css: css, cssETag: `"` + hex.EncodeToString(sum[:8]) + `"`, notFoundBody: nf}
 }
 
 func baseHeaders(h http.Header) {
@@ -46,7 +51,8 @@ func (a *app) notFound(w http.ResponseWriter) {
 	h.Set("Content-Type", "text/html; charset=utf-8")
 	h.Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusNotFound)
-	_, _ = w.Write([]byte("<!doctype html><meta charset=utf-8><title>Not found</title><p>Not found\n"))
+	// One fixed page for every miss: it must never vary with, or echo, the request.
+	_, _ = w.Write(a.notFoundBody)
 }
 
 func (a *app) ServeHTTP(w http.ResponseWriter, r *http.Request) {

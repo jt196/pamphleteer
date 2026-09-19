@@ -68,7 +68,7 @@ func TestNotFoundIsUniformAndUncacheable(t *testing.T) {
 		"draft.md": "---\npublish: false\nslug: draft12345\n---\nx",
 	})
 	var first string
-	for i, p := range []string{"/", "/nope", "/draft12345", "/draft", "/n", "/n.md", "/page12345/", "/page12345/extra", "/PAGE12345"} {
+	for i, p := range []string{"/", "/nope", "/draft12345", "/draft", "/n", "/n.md", "/page12345/", "/page12345/extra", "/PAGE12345", "/probe-marker-xyz"} {
 		rec := get(a, "GET", p)
 		mustStatus(t, rec, 404)
 		if rec.Header().Get("Cache-Control") != "no-store" {
@@ -79,7 +79,13 @@ func TestNotFoundIsUniformAndUncacheable(t *testing.T) {
 		} else if body(rec) != first {
 			t.Errorf("%s: 404 body differs, which would reveal existence", p)
 		}
+		if strings.Contains(body(rec), "probe-marker-xyz") {
+			t.Errorf("%s: 404 page must not echo the requested path", p)
+		}
 	}
+	// It is a real page that reuses the site stylesheet, and stays script-free.
+	mustContain(t, first, `<link rel="stylesheet" href="/style.css">`, "Not found", `noindex`)
+	mustNotContain(t, first, "<script")
 }
 
 func TestPathTraversalCannotReachTheFilesystem(t *testing.T) {
